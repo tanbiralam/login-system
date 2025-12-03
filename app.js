@@ -22,7 +22,7 @@ app.use("/api/users", protect, userRoutes);
 connectDB();
 
 sequelize
-  .sync({ alter: true }) // auto-update table
+  .sync({ alter: true })
   .then(() => console.log("Models synced"))
   .catch(console.error);
 
