@@ -1,15 +1,9 @@
-import { prisma } from "../database/prisma.js";
+import { User } from "../models/user.model.js";
 
 export const getUsers = async (req, res, next) => {
   try {
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const users = await User.findAll({
+      attributes: ["id", "name", "email", "createdAt", "updatedAt"],
     });
 
     res.status(200).json({
@@ -26,15 +20,8 @@ export const getUser = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
 
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const user = await User.findByPk(id, {
+      attributes: ["id", "name", "email", "createdAt", "updatedAt"],
     });
 
     if (!user) {

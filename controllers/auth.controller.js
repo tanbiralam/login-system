@@ -1,15 +1,13 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { prisma } from "../database/prisma.js";
+import { User } from "../models/user.model.js";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "../config/env.js";
 
 export const register = async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    const existingUser = await User.findOne({ where: { email } });
 
     if (existingUser) {
       return res.status(400).json({
@@ -20,12 +18,10 @@ export const register = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-      },
+    const newUser = await User.create({
+      name,
+      email,
+      password: hashedPassword,
     });
 
     return res.status(201).json({
@@ -42,9 +38,7 @@ export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+    const user = await User.findOne({ where: { email } });
 
     if (!user) {
       return res.status(400).json({

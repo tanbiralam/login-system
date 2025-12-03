@@ -6,6 +6,9 @@ import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import { protect } from "./middlewares/auth.middleware.js";
 
+import { connectDB } from "./database/sequelize.js";
+import { sequelize } from "./database/sequelize.js";
+
 console.log(`Current Environment: ${NODE_ENV}`);
 
 const app = express();
@@ -16,8 +19,15 @@ app.use("/api/auth", authRoutes);
 
 app.use("/api/users", protect, userRoutes);
 
+connectDB();
+
+sequelize
+  .sync({ alter: true }) // auto-update table
+  .then(() => console.log("Models synced"))
+  .catch(console.error);
+
 app.get("/", (req, res) => {
-  res.send("Welcome to the Login System API (Prisma + NeonDB)");
+  res.send("Welcome to the Login System API ");
 });
 
 app.listen(PORT, () => {

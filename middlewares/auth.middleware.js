@@ -1,8 +1,8 @@
 import jwt from "jsonwebtoken";
-import { prisma } from "../database/prisma.js";
+import { User } from "../models/user.model.js";
 import { JWT_SECRET } from "../config/env.js";
 
-export const protect = async (req, resizeBy, next) => {
+export const protect = async (req, res, next) => {
   try {
     let token;
 
@@ -12,6 +12,7 @@ export const protect = async (req, resizeBy, next) => {
     ) {
       token = req.headers.authorization.split(" ")[1];
     }
+
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -21,9 +22,8 @@ export const protect = async (req, resizeBy, next) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
-      select: { id: true, name: true, email: true },
+    const user = await User.findByPk(decoded.id, {
+      attributes: ["id", "name", "email"],
     });
 
     if (!user) {
