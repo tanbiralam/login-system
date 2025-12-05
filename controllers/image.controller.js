@@ -15,7 +15,7 @@ export const uploadImage = async (req, res, next) => {
 
     const newImage = await Image.create({
       filename: originalname,
-      mimetype: req.file.mimetype,
+      mimeType: req.file.mimetype,
       data: buffer,
       userId: req.user.id,
     });
@@ -26,7 +26,7 @@ export const uploadImage = async (req, res, next) => {
       data: {
         id: newImage.id,
         filename: newImage.filename,
-        mimetype: newImage.mimetype,
+        mimetype: newImage.mimeType,
         createdAt: newImage.createdAt,
       },
     });
