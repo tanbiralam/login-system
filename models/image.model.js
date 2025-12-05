@@ -18,10 +18,6 @@ export const Image = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
-    // data: {
-    //   type: DataTypes.BLOB,
-    //   allowNull: false,
-    // },
   },
   {
     tableName: "Images",
