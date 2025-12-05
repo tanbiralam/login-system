@@ -4,6 +4,8 @@ import { PORT, NODE_ENV } from "./config/env.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
+import imageRoutes from "./routes/image.routes.js";
+
 import { protect } from "./middlewares/auth.middleware.js";
 
 import { connectDB } from "./database/sequelize.js";
@@ -18,6 +20,8 @@ app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 
 app.use("/api/users", protect, userRoutes);
+
+app.use("/api/images", imageRoutes);
 
 connectDB();
 
