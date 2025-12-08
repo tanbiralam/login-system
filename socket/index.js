@@ -11,15 +11,18 @@ export const initSocket = (server) => {
   io.use(socketAuth);
 
   io.on("connection", (socket) => {
+    const userKey = String(socket.userId);
     console.log("User connected:", socket.userId);
 
-    onlineUsers.set(socket.userId, socket.id);
+    onlineUsers.set(userKey, socket.id);
+    console.log("Online users map after connect:", Array.from(onlineUsers.entries()));
 
     registerMessageHandlers(io, socket);
 
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.userId);
-      onlineUsers.delete(socket.userId);
+      onlineUsers.delete(userKey);
+      console.log("Online users map after disconnect:", Array.from(onlineUsers.entries()));
     });
   });
 

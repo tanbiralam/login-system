@@ -4,6 +4,12 @@ import { onlineUsers } from "./user.map.js";
 export const registerMessageHandlers = (io, socket) => {
   socket.on("send_message", async ({ receiverId, content }) => {
     try {
+      console.log("send_message received", {
+        from: socket.userId,
+        to: receiverId,
+        content,
+      });
+
       const newMessage = await Message.create({
         senderId: socket.userId,
         receiverId,
@@ -12,9 +18,16 @@ export const registerMessageHandlers = (io, socket) => {
 
       socket.emit("message_sent", newMessage);
 
-      const receiverSocketId = onlineUsers.get(receiverId);
+      const receiverSocketId = onlineUsers.get(String(receiverId));
+      console.log("Resolved receiver socket", {
+        receiverId,
+        receiverSocketId,
+        onlineUsers: Array.from(onlineUsers.entries()),
+      });
       if (receiverSocketId) {
         io.to(receiverSocketId).emit("receive_message", newMessage);
+      } else {
+        console.log("Receiver not online; message stored only");
       }
     } catch (err) {
       console.error("Message error:", err);
