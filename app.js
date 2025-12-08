@@ -1,5 +1,6 @@
 import express from "express";
 import { PORT, NODE_ENV } from "./config/env.js";
+import cors from "cors";
 
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
@@ -13,6 +14,14 @@ import { sequelize } from "./database/sequelize.js";
 console.log(`Current Environment: ${NODE_ENV}`);
 
 const app = express();
+
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
