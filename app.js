@@ -5,6 +5,7 @@ import cors from "cors";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import imageRoutes from "./routes/image.routes.js";
+import inviteRoutes from "./routes/invite.routes.js";
 
 import { protect } from "./middlewares/auth.middleware.js";
 
@@ -23,12 +24,15 @@ app.use(
 );
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/auth", authRoutes);
 
 app.use("/api/users", protect, userRoutes);
 
 app.use("/api/images", imageRoutes);
+
+app.use("/api/invites", inviteRoutes);
 
 connectDB();
 
