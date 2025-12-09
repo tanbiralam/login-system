@@ -8,6 +8,10 @@ export const {
   DATABASE_URL,
   JWT_SECRET,
   JWT_EXPIRES_IN,
-  RESEND_API_KEY,
   FRONTEND_URL,
+  SMTP_HOST,
+  SMTP_PORT,
+  SMTP_USER,
+  SMTP_PASS,
+  EMAIL_FROM,
 } = process.env;

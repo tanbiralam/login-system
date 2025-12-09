@@ -1,7 +1,22 @@
-import { Resend } from "resend";
-import { RESEND_API_KEY, FRONTEND_URL } from "../config/env.js";
+import nodemailer from "nodemailer";
+import {
+  FRONTEND_URL,
+  SMTP_HOST,
+  SMTP_PORT,
+  SMTP_USER,
+  SMTP_PASS,
+  EMAIL_FROM,
+} from "../config/env.js";
 
-const resend = new Resend(RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: Number(SMTP_PORT) || 587,
+  secure: Number(SMTP_PORT) === 465,
+  auth: {
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+  },
+});
 
 export const sendInviteEmail = async (email, token) => {
   const inviteUrl = `${FRONTEND_URL}/signup?inviteToken=${token}`;
@@ -13,10 +28,11 @@ export const sendInviteEmail = async (email, token) => {
     <p>This link will expire in 24 hours.</p>
   `;
 
-  await resend.emails.send({
-    from: "itzmetanbir@gmail.com",
+  await transporter.sendMail({
     to: email,
+    from: EMAIL_FROM || SMTP_USER,
     subject: "You're invited!",
     html: htmlContent,
+    text: `You have been invited! Accept your invite: ${inviteUrl}. This link will expire in 24 hours.`,
   });
 };
