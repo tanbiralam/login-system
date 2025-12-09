@@ -40,6 +40,7 @@ export default function AcceptInvite({ inviteToken, onLogin }) {
       const res = await fetch("http://localhost:8000/api/invites/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ token: inviteToken, password, name }),
       });
 

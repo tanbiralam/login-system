@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, onForgot }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -10,6 +10,7 @@ export default function Login({ onLogin }) {
     const res = await fetch("http://localhost:8000/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ email, password }),
     });
 
@@ -42,6 +43,13 @@ export default function Login({ onLogin }) {
         />
 
         <button className="bg-blue-600 text-white p-2 rounded">Login</button>
+        <button
+          type="button"
+          className="text-blue-600 underline text-left"
+          onClick={onForgot}
+        >
+          Forgot password?
+        </button>
       </form>
     </div>
   );

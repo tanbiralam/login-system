@@ -117,6 +117,13 @@ export const acceptInvite = async (req, res, next) => {
       expiresIn: JWT_EXPIRES_IN,
     });
 
+    res.cookie("token", authToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: (parseInt(JWT_EXPIRES_IN, 10) || 24) * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === "production",
+    });
+
     return res.status(201).json({
       success: true,
       message: "Invite accepted. Account created.",

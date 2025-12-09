@@ -36,3 +36,22 @@ export const sendInviteEmail = async (email, token) => {
     text: `You have been invited! Accept your invite: ${inviteUrl}. This link will expire in 24 hours.`,
   });
 };
+
+export const sendPasswordResetEmail = async (email, token) => {
+  const resetUrl = `${FRONTEND_URL}/reset-password?token=${token}`;
+
+  const htmlContent = `
+    <h2>Password Reset Requested</h2>
+    <p>Click the link below to reset your password. If you didn't request this, you can ignore this email.</p>
+    <a href="${resetUrl}">Reset Password</a>
+    <p>This link will expire in 1 hour.</p>
+  `;
+
+  await transporter.sendMail({
+    to: email,
+    from: EMAIL_FROM || SMTP_USER,
+    subject: "Reset your password",
+    html: htmlContent,
+    text: `Reset your password using this link: ${resetUrl}. The link expires in 1 hour.`,
+  });
+};
