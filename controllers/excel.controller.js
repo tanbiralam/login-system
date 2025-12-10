@@ -7,6 +7,14 @@ import { RuleCriteria } from "../models/ruleBook/ruleCriteria.model.js";
 import { MetaData } from "../models/ruleBook/metaData.model.js";
 import { RuleOutput } from "../models/ruleBook/ruleOutput.model.js";
 
+async function ensureMetaData(name, datatype = "string") {
+  const [meta] = await MetaData.findOrCreate({
+    where: { name },
+    defaults: { datatype },
+  });
+  return meta;
+}
+
 function parseScoreOperator(scoreValue) {
   scoreValue = String(scoreValue).trim();
 
@@ -38,8 +46,9 @@ export async function uploadAndSync(req, res) {
     const worksheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(worksheet, { defval: null });
 
-    const scoreMeta = await MetaData.findOne({ where: { name: "score" } });
-    const typeMeta = await MetaData.findOne({ where: { name: "type" } });
+    // Ensure the required metadata rows exist so imports never fail on a fresh DB
+    const scoreMeta = await ensureMetaData("score");
+    const typeMeta = await ensureMetaData("type");
 
     if (!scoreMeta || !typeMeta) {
       return res.status(500).json({
