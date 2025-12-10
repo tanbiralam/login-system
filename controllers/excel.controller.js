@@ -7,6 +7,7 @@ import { RuleCriteria } from "../models/ruleBook/ruleCriteria.model.js";
 import { MetaData } from "../models/ruleBook/metaData.model.js";
 import { RuleOutput } from "../models/ruleBook/ruleOutput.model.js";
 
+// Ensures a metadata row exists; created on-demand during import
 async function ensureMetaData(name, datatype = "string") {
   const [meta] = await MetaData.findOrCreate({
     where: { name },
@@ -15,6 +16,7 @@ async function ensureMetaData(name, datatype = "string") {
   return meta;
 }
 
+// Normalizes values so comparisons work across numbers/strings
 function normalizeValue(value) {
   if (value === null || value === undefined) return null;
   const asNumber = Number(value);
@@ -71,6 +73,7 @@ function matchesCriterion(inputValue, operator, criterionValue) {
   return false;
 }
 
+// Used to break ties: narrower or exact criteria win over broad ones
 function criterionSpecificity(operator, criterionValue) {
   // Lower score means more specific; used to break ties when multiple rules match
   if (operator === "=") return 0;
@@ -85,6 +88,7 @@ function criterionSpecificity(operator, criterionValue) {
   return Number.POSITIVE_INFINITY;
 }
 
+// Parses score text from Excel into operator/value
 function parseScoreOperator(scoreValue) {
   scoreValue = String(scoreValue).trim();
 
@@ -104,6 +108,7 @@ function parseScoreOperator(scoreValue) {
   return { operator: "=", value: scoreValue };
 }
 
+// Handles Excel upload; creates products, rules, criteria, and outputs
 export async function uploadAndSync(req, res) {
   try {
     if (!req.file) {
@@ -176,10 +181,12 @@ export async function uploadAndSync(req, res) {
   }
 }
 
+// Evaluates incoming payload against stored rules; returns the best match
 export async function evaluateRules(req, res) {
   try {
     const { product: productNameFromBody, ...payload } = req.body || {};
 
+    // Load rules scoped to a product if provided, otherwise load all products’ rules
     let rules = [];
     if (productNameFromBody) {
       const product = await Product.findOne({
@@ -209,16 +216,19 @@ export async function evaluateRules(req, res) {
       });
     }
 
+    // No rules configured at all
     if (!rules.length) {
       return res.status(404).json({ message: "No rules configured." });
     }
 
+    // Evaluate every rule and keep all matches so we can pick the most specific one
     const matched = [];
 
     for (const rule of rules) {
       const criteria = rule.RuleCriteria || [];
       const output = rule.RuleOutput;
 
+      // All criteria must match (logical AND)
       const allMatch = criteria.every((criterion) => {
         const fieldName =
           criterion.MetaDatum?.name ||
@@ -233,6 +243,7 @@ export async function evaluateRules(req, res) {
       });
 
       if (allMatch && output) {
+        // Specificity helps pick the narrowest rule when multiple rules match
         const specificity =
           criteria.reduce(
             (acc, c) => acc + criterionSpecificity(c.operator, c.value),
@@ -247,6 +258,7 @@ export async function evaluateRules(req, res) {
       }
     }
 
+    // Return the most specific matching rule (narrower ranges and exact matches first)
     if (matched.length) {
       matched.sort((a, b) => {
         if (a.specificity !== b.specificity) {
