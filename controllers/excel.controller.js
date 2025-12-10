@@ -71,6 +71,20 @@ function matchesCriterion(inputValue, operator, criterionValue) {
   return false;
 }
 
+function criterionSpecificity(operator, criterionValue) {
+  // Lower score means more specific; used to break ties when multiple rules match
+  if (operator === "=") return 0;
+  if (operator === "between") {
+    const [minRaw, maxRaw] = String(criterionValue).split("-");
+    const min = Number(minRaw);
+    const max = Number(maxRaw);
+    if (Number.isNaN(min) || Number.isNaN(max)) return Number.POSITIVE_INFINITY;
+    return Math.abs(max - min);
+  }
+  // Comparisons and "in" are broader
+  return Number.POSITIVE_INFINITY;
+}
+
 function parseScoreOperator(scoreValue) {
   scoreValue = String(scoreValue).trim();
 
@@ -199,6 +213,8 @@ export async function evaluateRules(req, res) {
       return res.status(404).json({ message: "No rules configured." });
     }
 
+    const matched = [];
+
     for (const rule of rules) {
       const criteria = rule.RuleCriteria || [];
       const output = rule.RuleOutput;
@@ -217,13 +233,35 @@ export async function evaluateRules(req, res) {
       });
 
       if (allMatch && output) {
-        return res.json({
-          output: {
-            A: output.A,
-            B: output.B,
-          },
+        const specificity =
+          criteria.reduce(
+            (acc, c) => acc + criterionSpecificity(c.operator, c.value),
+            0
+          ) || Number.POSITIVE_INFINITY;
+
+        matched.push({
+          rule,
+          output,
+          specificity,
         });
       }
+    }
+
+    if (matched.length) {
+      matched.sort((a, b) => {
+        if (a.specificity !== b.specificity) {
+          return a.specificity - b.specificity; // prefer more specific (lower)
+        }
+        return a.rule.id - b.rule.id; // stable fallback
+      });
+
+      const best = matched[0];
+      return res.json({
+        output: {
+          A: best.output.A,
+          B: best.output.B,
+        },
+      });
     }
 
     return res.status(404).json({ message: "No matching rule found." });
