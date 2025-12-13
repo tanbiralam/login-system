@@ -14,4 +14,7 @@ export const {
   SMTP_USER,
   SMTP_PASS,
   EMAIL_FROM,
+  REDIS_URL,
+  WEBHOOK_URL,
+  WEBHOOK_MAX_ATTEMPTS,
 } = process.env;

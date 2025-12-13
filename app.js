@@ -8,6 +8,7 @@ import userRoutes from "./routes/user.routes.js";
 import imageRoutes from "./routes/image.routes.js";
 import inviteRoutes from "./routes/invite.routes.js";
 import excelRoutes from "./routes/excel.routes.js";
+import csvRoutes from "./routes/csv.routes.js";
 
 import { protect } from "./middlewares/auth.middleware.js";
 
@@ -38,6 +39,7 @@ app.use("/api/images", imageRoutes);
 app.use("/api/invites", inviteRoutes);
 
 app.use("/api/excel", excelRoutes);
+app.use("/api/csv", csvRoutes);
 
 connectDB();
 
