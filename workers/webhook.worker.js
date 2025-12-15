@@ -5,12 +5,20 @@ import { CsvFile } from "../models/csvModels/index.js";
 
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const MAX_ATTEMPTS = Number(process.env.WEBHOOK_MAX_ATTEMPTS || 5);
-const RETRY_DELAYS = [0, 60_000, 300_000, 1_800_000, 1_800_000]; // ms for attempts 1-5
+const RETRY_DELAYS = [60_000, 300_000, 1_800_000]; // ms for attempts 2-4+ (reuse last delay)
+
+console.log("[CSV][WEBHOOK] webhook worker initialized");
 
 buildWorker(
   WEBHOOK_QUEUE,
   async (job) => {
     const { fileId, attempt = 1 } = job.data;
+
+    console.log("[CSV][WEBHOOK] Attempt started", {
+      fileId,
+      attempt,
+      jobId: job.id,
+    });
 
     const file = await CsvFile.findByPk(fileId);
     if (!file) throw new Error(`File ${fileId} not found for webhook`);
@@ -42,9 +50,11 @@ buildWorker(
         lastWebhookError: null,
         nextWebhookAt: null,
       });
+      console.log("[CSV][WEBHOOK] Attempt success", { fileId, attempt });
     } catch (err) {
       const nextAttempt = attempt + 1;
-      const nextDelay = RETRY_DELAYS[attempt] || RETRY_DELAYS.at(-1);
+      const nextDelay =
+        RETRY_DELAYS[Math.min(attempt - 1, RETRY_DELAYS.length - 1)];
       const lastError =
         err.response?.data?.message ||
         err.message ||
@@ -62,7 +72,19 @@ buildWorker(
 
       if (nextAttempt <= MAX_ATTEMPTS) {
         await enqueueWebhook(fileId, nextAttempt, nextDelay || 0);
+        console.warn("[CSV][WEBHOOK] Attempt failed, will retry", {
+          fileId,
+          attempt,
+          nextAttempt,
+          delayMs: nextDelay,
+          error: lastError,
+        });
       } else {
+        console.error("[CSV][WEBHOOK] Final attempt failed", {
+          fileId,
+          attempt,
+          error: lastError,
+        });
         throw new Error(
           `Webhook failed after ${attempt} attempts: ${lastError}`
         );

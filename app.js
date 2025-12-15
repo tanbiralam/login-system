@@ -1,4 +1,5 @@
 import express from "express";
+import multer from "multer";
 import { PORT, NODE_ENV } from "./config/env.js";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -50,6 +51,26 @@ sequelize
 
 app.get("/", (req, res) => {
   res.send("Welcome to the Login System API ");
+});
+
+// Central error handler to keep responses consistent
+app.use((err, req, res, _next) => {
+  console.error("Unhandled error", {
+    path: req.path,
+    method: req.method,
+    message: err.message,
+    stack: err.stack,
+  });
+
+  if (err instanceof multer.MulterError) {
+    return res
+      .status(400)
+      .json({ success: false, message: err.message, code: err.code });
+  }
+
+  return res
+    .status(err.status || 500)
+    .json({ success: false, message: err.message || "Internal Server Error" });
 });
 
 // app.listen(PORT, () => {

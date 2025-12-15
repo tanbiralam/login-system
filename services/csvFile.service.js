@@ -15,6 +15,10 @@ export const createCsvFileEntry = async ({
   });
 
   await enqueueFileProcessing(record.id, storedPath);
+  console.log("[CSV][QUEUE] File enqueued for processing", {
+    fileId: record.id,
+    storedPath,
+  });
   return record;
 };
 

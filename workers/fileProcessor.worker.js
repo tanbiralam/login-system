@@ -9,6 +9,8 @@ import {
   InvalidRecord,
 } from "../models/csvModels/index.js";
 
+console.log("[CSV][WORKER] fileProcessor worker initialized");
+
 const BATCH_SIZE = 500;
 
 const validateRow = (row) => {
@@ -31,6 +33,13 @@ buildWorker(
   FILE_PROCESSING_QUEUE,
   async (job) => {
     const { fileId, filePath } = job.data;
+
+    console.log("[CSV][WORKER] Job started", {
+      fileId,
+      filePath,
+      queue: FILE_PROCESSING_QUEUE,
+      jobId: job.id,
+    });
 
     const fileRecord = await CsvFile.findByPk(fileId);
     if (!fileRecord) {
@@ -111,9 +120,18 @@ buildWorker(
         completedAt: new Date(),
       });
 
+      console.log("[CSV][WORKER] Job completed", {
+        fileId,
+        totals: { totalRows, validRows, invalidRows },
+      });
+
       await enqueueWebhook(fileId);
       return { totalRows, validRows, invalidRows };
     } catch (error) {
+      console.error("[CSV][WORKER] Job failed", {
+        fileId,
+        error: error.message,
+      });
       await fileRecord.update({
         status: "FAILED",
         webhookStatus: "FAILED",
