@@ -42,6 +42,14 @@ app.use("/api/invites", inviteRoutes);
 app.use("/api/excel", excelRoutes);
 app.use("/api/csv", csvRoutes);
 
+app.post("/webhook-receiver", (req, res) => {
+  console.log("[WEBHOOK][RECEIVED]", {
+    path: req.path,
+    body: req.body,
+  });
+  return res.status(200).json({ ok: true });
+});
+
 connectDB();
 
 sequelize
