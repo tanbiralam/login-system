@@ -14,12 +14,13 @@ export const createCsvFileEntry = async ({
     sizeBytes,
   });
 
-  await enqueueFileProcessing(record.id, storedPath);
-  console.log("[CSV][QUEUE] File enqueued for processing", {
-    fileId: record.id,
-    storedPath,
-  });
-  return record;
+  await enqueueFileProcessing(record.id, storedPath); //here the async function is called to enqueue the file for processing
+
+  return {
+    id: record.id,
+    status: record.status,
+    uploadedAt: record.uploadedAt,
+  };
 };
 
 export const getCsvStatus = async (fileId) => {

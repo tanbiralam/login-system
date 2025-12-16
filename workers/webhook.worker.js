@@ -23,6 +23,11 @@ buildWorker(
     const file = await CsvFile.findByPk(fileId);
     if (!file) throw new Error(`File ${fileId} not found for webhook`);
 
+    // If webhook already succeeded, no need to process again(IDEMPOTENCY Guard)
+    if (file.webhookStatus === "SUCCESS") {
+      return;
+    }
+
     if (!WEBHOOK_URL) {
       await file.update({
         webhookStatus: "FAILED",
@@ -56,9 +61,7 @@ buildWorker(
       const nextDelay =
         RETRY_DELAYS[Math.min(attempt - 1, RETRY_DELAYS.length - 1)];
       const lastError =
-        err.response?.data?.message ||
-        err.message ||
-        "Unknown webhook error";
+        err.response?.data?.message || err.message || "Unknown webhook error";
 
       await file.update({
         webhookStatus: nextAttempt > MAX_ATTEMPTS ? "FAILED" : "PENDING",
