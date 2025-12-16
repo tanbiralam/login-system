@@ -1,5 +1,5 @@
 import fs from "fs";
-import pdfParse from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 
 import { buildWorker } from "../queues/queue.config.js";
 import { PDF_PROCESSING_QUEUE } from "../queues/pdfProcessing.queue.js";
@@ -31,6 +31,7 @@ buildWorker(
       return;
     }
 
+    let parser;
     try {
       await PdfDocument.update(
         { status: "PROCESSING" },
@@ -38,12 +39,13 @@ buildWorker(
       );
 
       const fileBuffer = await fs.promises.readFile(pdfPath);
-      const parsed = await pdfParse(fileBuffer);
+      parser = new PDFParse({ data: fileBuffer });
+      const parsed = await parser.getText();
 
       await PdfParsedData.create({
         pdfId,
         parsedText: parsed.text,
-        pageCount: parsed.numpages,
+        pageCount: parsed.total,
       });
 
       await PdfDocument.update(
@@ -57,7 +59,7 @@ buildWorker(
 
       console.log("[PDF][WORKER] Completed PDF processing", {
         pdfId,
-        pages: parsed.numpages,
+        pages: parsed.total,
       });
     } catch (error) {
       console.error("[PDF][WORKER] Error processing PDF", {
@@ -72,6 +74,9 @@ buildWorker(
 
       throw error;
     } finally {
+      if (parser) {
+        await parser.destroy().catch(() => {});
+      }
       // cleanup temp file
       await fs.promises.unlink(pdfPath).catch((err) => {
         console.warn("[PDF][WORKER] Failed to delete temp file", {
