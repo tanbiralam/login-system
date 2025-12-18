@@ -12,10 +12,17 @@ export const Company = sequelize.define(
     name: {
       type: DataTypes.STRING(150),
       allowNull: false,
+      unique: true,
     },
   },
   {
     tableName: "companies",
-    timestamps: false,
+    timestamps: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ["name"],
+      },
+    ],
   }
 );
