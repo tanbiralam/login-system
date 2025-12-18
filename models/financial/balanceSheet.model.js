@@ -1,6 +1,7 @@
 import { DataTypes } from "sequelize";
 import { sequelize } from "../../database/sequelize.js";
 import { Engagement } from "./engagement.model.js";
+import { PdfDocument } from "../pdfDocument.model.js";
 
 export const BalanceSheet = sequelize.define(
   "BalanceSheet",
@@ -9,6 +10,15 @@ export const BalanceSheet = sequelize.define(
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
+    },
+    pdfId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "pdf_documents",
+        key: "id",
+      },
+      onDelete: "CASCADE",
     },
     engagementId: {
       type: DataTypes.INTEGER,
@@ -35,6 +45,10 @@ export const BalanceSheet = sequelize.define(
     timestamps: true,
     indexes: [
       {
+        unique: true,
+        fields: ["pdfId"],
+      },
+      {
         fields: ["engagementId"],
         unique: true,
       },
@@ -44,3 +58,5 @@ export const BalanceSheet = sequelize.define(
 
 Engagement.hasOne(BalanceSheet, { foreignKey: "engagementId" });
 BalanceSheet.belongsTo(Engagement, { foreignKey: "engagementId" });
+PdfDocument.hasOne(BalanceSheet, { foreignKey: "pdfId" });
+BalanceSheet.belongsTo(PdfDocument, { foreignKey: "pdfId" });

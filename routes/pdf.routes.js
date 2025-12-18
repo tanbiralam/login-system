@@ -7,6 +7,7 @@ import {
   uploadPdf,
   getPdfStatus,
   getPdfResult,
+  getPdfFinancial,
 } from "../controllers/pdf.controller.js";
 
 const router = express.Router();
@@ -46,5 +47,6 @@ const upload = multer({
 router.post("/upload", upload.single("file"), uploadPdf);
 router.get("/status/:pdfId", getPdfStatus);
 router.get("/result/:pdfId", getPdfResult);
+router.get("/financial/:pdfId", getPdfFinancial);
 
 export default router;
