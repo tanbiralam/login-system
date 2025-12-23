@@ -8,11 +8,22 @@ const sanitizeRows = (rows) =>
     .map((row) => ({ name: row.name?.trim() || "", amount: row.amount }))
     .filter((row) => row.name);
 
+const request = async (url, options = {}) => {
+  const res = await fetch(url, { credentials: "include", ...options });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    const message = data?.message || "Request failed";
+    const error = new Error(message);
+    error.status = res.status;
+    throw error;
+  }
+  return res;
+};
+
 export default function PdfTools() {
   const [activePdfId, setActivePdfId] = useState(null);
   const [status, setStatus] = useState("");
   const [parsedText, setParsedText] = useState("");
-  const [financial, setFinancial] = useState(null);
   const [annotation, setAnnotation] = useState({
     companyName: "",
     engagementName: "",
@@ -70,32 +81,24 @@ export default function PdfTools() {
     setMessage("");
 
     try {
-      const res = await fetch(`${API_BASE}/latest`, {
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        setStatus("");
-        setFinancial(null);
-        setParsedText("");
-        setActivePdfId(null);
-        setMessage("No stored PDF found. Upload a PDF to begin.");
-        return;
-      }
-
+      const res = await request(`${API_BASE}/latest`);
       const data = await res.json();
+      const financial = data.data.financial;
+
       setActivePdfId(data.data.pdfId);
       setStatus(data.data.status);
       setParsedText(data.data.parsed?.text || "");
 
-      if (data.data.financial) {
-        setFinancial(data.data.financial);
-        hydrateFromFinancial(data.data.financial);
-      }
+      if (financial) hydrateFromFinancial(financial);
     } catch (err) {
-      setError("Failed to load stored PDF");
-      setActivePdfId(null);
-      setMessage("");
+      if (err.status === 404) {
+        setStatus("");
+        setParsedText("");
+        setActivePdfId(null);
+        setMessage("No stored PDF found. Upload a PDF to begin.");
+      } else {
+        setError(err.message || "Failed to load stored PDF");
+      }
     } finally {
       setLoadingExisting(false);
     }
@@ -103,28 +106,23 @@ export default function PdfTools() {
 
   const loadParsedText = async (pdfId) => {
     try {
-      const res = await fetch(`${API_BASE}/result/${pdfId}`, {
-        credentials: "include",
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setParsedText(data.data.text || "");
-    } catch (err) {
-      // ignore
+      const data = await request(`${API_BASE}/result/${pdfId}`).then((r) =>
+        r.json()
+      );
+      setParsedText(data.data?.text || "");
+    } catch {
+      /* ignore background load */
     }
   };
 
   const loadFinancial = async (pdfId) => {
     try {
-      const res = await fetch(`${API_BASE}/financial/${pdfId}`, {
-        credentials: "include",
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setFinancial(data.data);
+      const data = await request(`${API_BASE}/financial/${pdfId}`).then((r) =>
+        r.json()
+      );
       hydrateFromFinancial(data.data);
-    } catch (err) {
-      // ignore
+    } catch {
+      /* ignore background load */
     }
   };
 
@@ -134,17 +132,9 @@ export default function PdfTools() {
     setStatus("CHECKING");
     const tick = async () => {
       try {
-        const res = await fetch(`${API_BASE}/status/${pdfId}`, {
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          setStatus("ERROR");
-          setPolling(false);
-          return;
-        }
-
-        const data = await res.json();
+        const data = await request(`${API_BASE}/status/${pdfId}`).then((r) =>
+          r.json()
+        );
         const nextStatus = data.data.status;
         setStatus(nextStatus);
 
@@ -188,18 +178,10 @@ export default function PdfTools() {
     formData.append("file", file);
 
     try {
-      const res = await fetch(`${API_BASE}/upload`, {
+      const data = await request(`${API_BASE}/upload`, {
         method: "POST",
         body: formData,
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.message || "Upload failed");
-      }
-
-      const data = await res.json();
+      }).then((r) => r.json());
       setActivePdfId(data.pdfId);
       setStatus(data.status);
       pollStatus(data.pdfId);
@@ -245,17 +227,11 @@ export default function PdfTools() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/annotate`, {
+      const res = await request(`${API_BASE}/annotate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(payload),
       });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.message || "Annotation failed");
-      }
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -269,9 +245,7 @@ export default function PdfTools() {
     }
   };
 
-  const currentFileUrl = activePdfId
-    ? `${API_BASE}/file/${activePdfId}`
-    : null;
+  const currentFileUrl = activePdfId ? `${API_BASE}/file/${activePdfId}` : null;
 
   return (
     <div className="border rounded p-4 shadow-sm bg-white">
@@ -304,9 +278,7 @@ export default function PdfTools() {
               </div>
               <div className="text-sm">
                 Status:{" "}
-                <span className="font-medium">
-                  {status || "Not started"}
-                </span>
+                <span className="font-medium">{status || "Not started"}</span>
               </div>
             </div>
             {currentFileUrl && (
@@ -412,7 +384,12 @@ export default function PdfTools() {
                       placeholder="Name"
                       value={row.name}
                       onChange={(e) =>
-                        updateAnnotationRow("assets", idx, "name", e.target.value)
+                        updateAnnotationRow(
+                          "assets",
+                          idx,
+                          "name",
+                          e.target.value
+                        )
                       }
                     />
                     <input

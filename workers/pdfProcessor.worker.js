@@ -162,7 +162,17 @@ buildWorker(
       parser = new PDFParse({ data: fileBuffer });
       const parsed = await parser.getText();
 
-      const structured = parseBalanceSheetText(parsed.text);
+      let structured = null;
+      let parsingWarning = null;
+      try {
+        structured = parseBalanceSheetText(parsed.text);
+      } catch (err) {
+        parsingWarning = err.message || "Unable to derive financial structure";
+        console.warn("[PDF][WORKER] Fallback to text-only parse", {
+          pdfId,
+          warning: parsingWarning,
+        });
+      }
 
       await PdfParsedData.create({
         pdfId,
@@ -170,82 +180,84 @@ buildWorker(
         pageCount: parsed.total,
       });
 
-      // Company & engagement
-      const [company] = await Company.findOrCreate({
-        where: { name: structured.companyName },
-        defaults: { name: structured.companyName },
-      });
+      if (structured) {
+        // Company & engagement
+        const [company] = await Company.findOrCreate({
+          where: { name: structured.companyName },
+          defaults: { name: structured.companyName },
+        });
 
-      const [engagement] = await Engagement.findOrCreate({
-        where: { companyId: company.id, name: structured.engagementName },
-        defaults: { companyId: company.id, name: structured.engagementName },
-      });
+        const [engagement] = await Engagement.findOrCreate({
+          where: { companyId: company.id, name: structured.engagementName },
+          defaults: { companyId: company.id, name: structured.engagementName },
+        });
 
-      // Categories
-      const [assetCategory] = await Category.findOrCreate({
-        where: { name: "Assets" },
-        defaults: { name: "Assets" },
-      });
-      const [liabilityCategory] = await Category.findOrCreate({
-        where: { name: "Liabilities & Equity" },
-        defaults: { name: "Liabilities & Equity" },
-      });
+        // Categories
+        const [assetCategory] = await Category.findOrCreate({
+          where: { name: "Assets" },
+          defaults: { name: "Assets" },
+        });
+        const [liabilityCategory] = await Category.findOrCreate({
+          where: { name: "Liabilities & Equity" },
+          defaults: { name: "Liabilities & Equity" },
+        });
 
-      // Balance sheet
-      const [balanceSheet] = await BalanceSheet.findOrCreate({
-        where: { pdfId },
-        defaults: {
-          pdfId,
+        // Balance sheet
+        const [balanceSheet] = await BalanceSheet.findOrCreate({
+          where: { pdfId },
+          defaults: {
+            pdfId,
+            engagementId: engagement.id,
+            totalAssetAmount: structured.assets.total,
+            totalLiabilityAmount: structured.liabilities.total,
+          },
+        });
+
+        await balanceSheet.update({
           engagementId: engagement.id,
           totalAssetAmount: structured.assets.total,
           totalLiabilityAmount: structured.liabilities.total,
-        },
-      });
-
-      await balanceSheet.update({
-        engagementId: engagement.id,
-        totalAssetAmount: structured.assets.total,
-        totalLiabilityAmount: structured.liabilities.total,
-      });
-
-      const upsertItem = async (category, item) => {
-        const [categoryItem] = await CategoryItem.findOrCreate({
-          where: { categoryId: category.id, name: item.name },
-          defaults: { categoryId: category.id, name: item.name },
         });
 
-        const [balanceSheetItem] = await BalanceSheetItem.findOrCreate({
-          where: {
-            balanceSheetId: balanceSheet.id,
-            categoryItemId: categoryItem.id,
-          },
-          defaults: {
-            balanceSheetId: balanceSheet.id,
+        const upsertItem = async (category, item) => {
+          const [categoryItem] = await CategoryItem.findOrCreate({
+            where: { categoryId: category.id, name: item.name },
+            defaults: { categoryId: category.id, name: item.name },
+          });
+
+          const [balanceSheetItem] = await BalanceSheetItem.findOrCreate({
+            where: {
+              balanceSheetId: balanceSheet.id,
+              categoryItemId: categoryItem.id,
+            },
+            defaults: {
+              balanceSheetId: balanceSheet.id,
+              categoryId: category.id,
+              categoryItemId: categoryItem.id,
+              amount: item.amount,
+            },
+          });
+
+          await balanceSheetItem.update({
             categoryId: category.id,
-            categoryItemId: categoryItem.id,
             amount: item.amount,
-          },
-        });
+          });
+        };
 
-        await balanceSheetItem.update({
-          categoryId: category.id,
-          amount: item.amount,
-        });
-      };
+        for (const item of structured.assets.items) {
+          await upsertItem(assetCategory, item);
+        }
 
-      for (const item of structured.assets.items) {
-        await upsertItem(assetCategory, item);
-      }
-
-      for (const item of structured.liabilities.items) {
-        await upsertItem(liabilityCategory, item);
+        for (const item of structured.liabilities.items) {
+          await upsertItem(liabilityCategory, item);
+        }
       }
 
       await PdfDocument.update(
         {
           status: "COMPLETED",
           completedAt: new Date(),
-          errorReason: null,
+          errorReason: parsingWarning,
         },
         { where: { id: pdfId } }
       );
