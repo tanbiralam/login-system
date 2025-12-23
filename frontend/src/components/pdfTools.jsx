@@ -23,7 +23,7 @@ const request = async (url, options = {}) => {
 export default function PdfTools() {
   const [activePdfId, setActivePdfId] = useState(null);
   const [status, setStatus] = useState("");
-  const [parsedText, setParsedText] = useState("");
+  // const [parsedText, setParsedText] = useState("");
   const [annotation, setAnnotation] = useState({
     companyName: "",
     engagementName: "",
@@ -87,13 +87,13 @@ export default function PdfTools() {
 
       setActivePdfId(data.data.pdfId);
       setStatus(data.data.status);
-      setParsedText(data.data.parsed?.text || "");
+      // setParsedText(data.data.parsed?.text || "");
 
       if (financial) hydrateFromFinancial(financial);
     } catch (err) {
       if (err.status === 404) {
         setStatus("");
-        setParsedText("");
+        // setParsedText("");
         setActivePdfId(null);
         setMessage("No stored PDF found. Upload a PDF to begin.");
       } else {
@@ -104,16 +104,16 @@ export default function PdfTools() {
     }
   };
 
-  const loadParsedText = async (pdfId) => {
-    try {
-      const data = await request(`${API_BASE}/result/${pdfId}`).then((r) =>
-        r.json()
-      );
-      setParsedText(data.data?.text || "");
-    } catch {
-      /* ignore background load */
-    }
-  };
+  // const loadParsedText = async (pdfId) => {
+  //   try {
+  //     const data = await request(`${API_BASE}/result/${pdfId}`).then((r) =>
+  //       r.json()
+  //     );
+  //     setParsedText(data.data?.text || "");
+  //   } catch {
+  //     /* ignore background load */
+  //   }
+  // };
 
   const loadFinancial = async (pdfId) => {
     try {
@@ -140,7 +140,7 @@ export default function PdfTools() {
 
         if (nextStatus === "COMPLETED") {
           setPolling(false);
-          await loadParsedText(pdfId);
+          // await loadParsedText(pdfId);
           await loadFinancial(pdfId);
           setMessage("PDF processed successfully");
           return;
