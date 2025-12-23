@@ -312,12 +312,12 @@ export default function PdfTools() {
             </form>
           </div>
 
-          <div className="p-3 border rounded">
+          {/* <div className="p-3 border rounded">
             <p className="text-sm font-semibold mb-1">Parsed text</p>
             <div className="border h-40 overflow-y-auto p-2 text-sm bg-gray-50">
               {parsedText ? parsedText : "No parsed text yet."}
             </div>
-          </div>
+          </div> */}
         </div>
 
         <div className="p-3 border rounded flex flex-col gap-3">
