@@ -7,12 +7,14 @@ import ChatWindow from "./components/chatWindow";
 import InviteUser from "./components/inviteUser";
 import ForgotPassword from "./components/forgotPassword";
 import ResetPassword from "./components/resetPassword";
+import PdfTools from "./components/pdfTools";
 
 function App() {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [mode, setMode] = useState("login");
+  const [activeCard, setActiveCard] = useState("chat");
 
   const { inviteToken, resetToken } = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -91,15 +93,51 @@ function App() {
   }
 
   return (
-    <div className="p-4 flex flex-col gap-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start">
-        <div className="flex-1">
-          <ChatWindow user={user} />
-        </div>
-        <div className="w-full md:w-80">
-          <InviteUser authToken={token} />
-        </div>
+    <div className="p-4 flex flex-col gap-4">
+      <div className="grid gap-3 md:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => setActiveCard("chat")}
+          className={`border rounded p-4 text-left transition ${
+            activeCard === "chat"
+              ? "bg-blue-50 border-blue-500"
+              : "bg-white hover:border-blue-300"
+          }`}
+        >
+          <p className="text-lg font-semibold">Chat</p>
+          <p className="text-sm text-gray-600">
+            Open the existing chat experience.
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveCard("pdf")}
+          className={`border rounded p-4 text-left transition ${
+            activeCard === "pdf"
+              ? "bg-blue-50 border-blue-500"
+              : "bg-white hover:border-blue-300"
+          }`}
+        >
+          <p className="text-lg font-semibold">PDF</p>
+          <p className="text-sm text-gray-600">
+            Upload, parse, and annotate financial statements.
+          </p>
+        </button>
       </div>
+
+      {activeCard === "chat" ? (
+        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+          <div className="flex-1">
+            <ChatWindow user={user} />
+          </div>
+          <div className="w-full md:w-80">
+            <InviteUser authToken={token} />
+          </div>
+        </div>
+      ) : (
+        <PdfTools />
+      )}
     </div>
   );
 }

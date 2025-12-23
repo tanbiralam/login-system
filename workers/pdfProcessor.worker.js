@@ -270,13 +270,7 @@ buildWorker(
       if (parser) {
         await parser.destroy().catch(() => {});
       }
-      // cleanup temp file
-      await fs.promises.unlink(pdfPath).catch((err) => {
-        console.warn("[PDF][WORKER] Failed to delete temp file", {
-          pdfPath,
-          error: err.message,
-        });
-      });
+      // keep uploaded PDF on disk so it can be re-used for annotation/download
     }
   },
   {

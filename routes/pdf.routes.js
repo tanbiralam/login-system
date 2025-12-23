@@ -8,6 +8,9 @@ import {
   getPdfStatus,
   getPdfResult,
   getPdfFinancial,
+  getLatestPdf,
+  getPdfFile,
+  annotatePdf,
 } from "../controllers/pdf.controller.js";
 
 const router = express.Router();
@@ -45,8 +48,11 @@ const upload = multer({
 });
 
 router.post("/upload", upload.single("file"), uploadPdf);
+router.get("/latest", getLatestPdf);
 router.get("/status/:pdfId", getPdfStatus);
 router.get("/result/:pdfId", getPdfResult);
 router.get("/financial/:pdfId", getPdfFinancial);
+router.get("/file/:pdfId", getPdfFile);
+router.post("/annotate", annotatePdf);
 
 export default router;
