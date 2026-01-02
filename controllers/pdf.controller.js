@@ -11,7 +11,11 @@ import { BalanceSheetItem } from "../models/financial/balanceSheetItem.model.js"
 import { Category } from "../models/financial/category.model.js";
 import { CategoryItem } from "../models/financial/categoryItem.model.js";
 import { sequelize } from "../database/sequelize.js";
-import { generateAnnotatedPdf } from "../services/pdfAnnotation.service.js";
+import {
+  extractPdfStructure,
+  generateAnnotatedPdf,
+  updatePdfInPlace,
+} from "../services/pdfAnnotation.service.js";
 
 const toNumber = (value) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -135,6 +139,8 @@ export const getPdfStatus = async (req, res, next) => {
 export const getPdfResult = async (req, res, next) => {
   try {
     const { pdfId } = req.params;
+    const includeStructure =
+      String(req.query.includeStructure || "").toLowerCase() === "true";
 
     const pdf = await PdfDocument.findByPk(pdfId);
 
@@ -164,12 +170,26 @@ export const getPdfResult = async (req, res, next) => {
       });
     }
 
+    let structure = null;
+    if (includeStructure && pdf.storedPath) {
+      const resolvedPath = path.resolve(pdf.storedPath);
+      const exists = await fs.promises
+        .access(resolvedPath, fs.constants.R_OK)
+        .then(() => true)
+        .catch(() => false);
+
+      if (exists) {
+        structure = await extractPdfStructure(resolvedPath);
+      }
+    }
+
     return res.json({
       success: true,
       data: {
         pdfId,
         pageCount: parsed.pageCount,
         text: parsed.parsedText,
+        structure,
       },
     });
   } catch (error) {
@@ -334,13 +354,69 @@ export const getPdfFile = async (req, res, next) => {
 };
 
 /**
+ * GET /api/pdf/structure/:pdfId
+ * Returns positional text data for a PDF
+ */
+export const getPdfStructure = async (req, res, next) => {
+  try {
+    const { pdfId } = req.params;
+    const pdf = await PdfDocument.findByPk(pdfId);
+
+    if (!pdf) {
+      return res.status(404).json({
+        success: false,
+        message: "PDF not found",
+      });
+    }
+
+    if (!pdf.storedPath) {
+      return res.status(404).json({
+        success: false,
+        message: "No stored file path for this PDF",
+      });
+    }
+
+    const resolvedPath = path.resolve(pdf.storedPath);
+    const exists = await fs.promises
+      .access(resolvedPath, fs.constants.R_OK)
+      .then(() => true)
+      .catch(() => false);
+
+    if (!exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Stored PDF file not found on disk",
+      });
+    }
+
+    const structure = await extractPdfStructure(resolvedPath);
+
+    return res.json({
+      success: true,
+      data: {
+        pdfId,
+        pages: structure,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * POST /api/pdf/annotate
  * Updates financial data and returns a generated PDF
  */
 export const annotatePdf = async (req, res, next) => {
   try {
-    const { pdfId, companyName, engagementName, assets = [], liabilities = [] } =
-      req.body;
+    const {
+      pdfId,
+      companyName,
+      engagementName,
+      assets = [],
+      liabilities = [],
+      updates = [],
+    } = req.body;
 
     if (!pdfId) {
       return res
@@ -363,6 +439,21 @@ export const annotatePdf = async (req, res, next) => {
         status: pdf.status,
       });
     }
+
+    const normalizedUpdates = Array.isArray(updates)
+      ? updates
+          .map((u) => ({
+            pageNumber: Number.parseInt(u.pageNumber || 1, 10),
+            x: Number(u.x || 0),
+            y: Number(u.y || 0),
+            width: u.width ? Number(u.width) : undefined,
+            height: u.height ? Number(u.height) : undefined,
+            fontSize: u.fontSize ? Number(u.fontSize) : undefined,
+            color: u.color,
+            text: typeof u.text === "string" ? u.text : "",
+          }))
+          .filter((u) => u.text && u.pageNumber > 0)
+      : [];
 
     const normalizedAssets = normalizeLineItems(assets);
     const normalizedLiabilities = normalizeLineItems(liabilities);
@@ -504,6 +595,53 @@ export const annotatePdf = async (req, res, next) => {
       }
     });
 
+    const resolvedPath = pdf.storedPath ? path.resolve(pdf.storedPath) : null;
+    const canUpdateExisting =
+      normalizedUpdates.length &&
+      resolvedPath &&
+      (await fs.promises
+        .access(resolvedPath, fs.constants.R_OK | fs.constants.W_OK)
+        .then(() => true)
+        .catch(() => false));
+
+    if (canUpdateExisting) {
+      const updatedBuffer = await updatePdfInPlace(
+        resolvedPath,
+        normalizedUpdates
+      );
+
+      // Refresh parsed snapshot to reflect in-place edits
+      const structured = await extractPdfStructure(resolvedPath);
+      const mergedText = structured
+        .map((page) => page.items.map((item) => item.text).join(" "))
+        .join("\n");
+
+      const existingParsed = await PdfParsedData.findOne({
+        where: { pdfId },
+      });
+
+      if (existingParsed) {
+        await existingParsed.update({
+          parsedText: mergedText,
+          pageCount: structured.length,
+        });
+      } else {
+        await PdfParsedData.create({
+          pdfId,
+          parsedText: mergedText,
+          pageCount: structured.length,
+        });
+      }
+
+      res.setHeader("Content-Type", pdf.mimeType || "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${pdf.originalName || "document.pdf"}"`
+      );
+      res.setHeader("X-Pdf-Id", pdfId);
+      return res.send(updatedBuffer);
+    }
+
     const pdfBuffer = await generateAnnotatedPdf({
       companyName: finalCompany,
       engagementName: finalEngagement,
@@ -520,6 +658,115 @@ export const annotatePdf = async (req, res, next) => {
     res.setHeader("X-Pdf-Id", pdfId);
 
     return res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/pdf/update
+ * Applies text updates directly onto the stored PDF (no new PDF generation)
+ */
+export const updatePdfContent = async (req, res, next) => {
+  try {
+    const { pdfId, updates = [] } = req.body;
+
+    if (!pdfId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "pdfId is required" });
+    }
+
+    if (!Array.isArray(updates) || !updates.length) {
+      return res.status(400).json({
+        success: false,
+        message: "updates must be a non-empty array",
+      });
+    }
+
+    const pdf = await PdfDocument.findByPk(pdfId);
+
+    if (!pdf) {
+      return res
+        .status(404)
+        .json({ success: false, message: "PDF not found for update" });
+    }
+
+    if (!pdf.storedPath) {
+      return res.status(404).json({
+        success: false,
+        message: "No stored file path for this PDF",
+      });
+    }
+
+    const resolvedPath = path.resolve(pdf.storedPath);
+    const exists = await fs.promises
+      .access(resolvedPath, fs.constants.R_OK | fs.constants.W_OK)
+      .then(() => true)
+      .catch(() => false);
+
+    if (!exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Stored PDF file not found on disk",
+      });
+    }
+
+    const normalizedUpdates = updates
+      .map((u) => ({
+        pageNumber: Number.parseInt(u.pageNumber || 1, 10),
+        x: Number(u.x || 0),
+        y: Number(u.y || 0),
+        width: u.width ? Number(u.width) : undefined,
+        height: u.height ? Number(u.height) : undefined,
+        fontSize: u.fontSize ? Number(u.fontSize) : undefined,
+        color: u.color,
+        text: typeof u.text === "string" ? u.text : "",
+      }))
+      .filter((u) => u.text && u.pageNumber > 0);
+
+    if (!normalizedUpdates.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid updates provided",
+      });
+    }
+
+    const updatedBuffer = await updatePdfInPlace(
+      resolvedPath,
+      normalizedUpdates
+    );
+
+    // Refresh parsed text snapshot to stay aligned with edits
+    const structured = await extractPdfStructure(resolvedPath);
+    const mergedText = structured
+      .map((page) => page.items.map((item) => item.text).join(" "))
+      .join("\n");
+
+    const existingParsed = await PdfParsedData.findOne({
+      where: { pdfId },
+    });
+
+    if (existingParsed) {
+      await existingParsed.update({
+        parsedText: mergedText,
+        pageCount: structured.length,
+      });
+    } else {
+      await PdfParsedData.create({
+        pdfId,
+        parsedText: mergedText,
+        pageCount: structured.length,
+      });
+    }
+
+    res.setHeader("Content-Type", pdf.mimeType || "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${pdf.originalName || "document.pdf"}"`
+    );
+
+    return res.send(updatedBuffer);
   } catch (error) {
     next(error);
   }

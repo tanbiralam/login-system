@@ -11,6 +11,8 @@ import {
   getLatestPdf,
   getPdfFile,
   annotatePdf,
+  getPdfStructure,
+  updatePdfContent,
 } from "../controllers/pdf.controller.js";
 
 const router = express.Router();
@@ -52,7 +54,9 @@ router.get("/latest", getLatestPdf);
 router.get("/status/:pdfId", getPdfStatus);
 router.get("/result/:pdfId", getPdfResult);
 router.get("/financial/:pdfId", getPdfFinancial);
+router.get("/structure/:pdfId", getPdfStructure);
 router.get("/file/:pdfId", getPdfFile);
 router.post("/annotate", annotatePdf);
+router.post("/update", updatePdfContent);
 
 export default router;

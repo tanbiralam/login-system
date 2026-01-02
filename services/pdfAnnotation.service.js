@@ -1,4 +1,10 @@
+import fs from "fs/promises";
 import PDFDocument from "pdfkit";
+import { PDFDocument as PDFLibDocument, StandardFonts, rgb } from "pdf-lib";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+
+const { getDocument, GlobalWorkerOptions } = pdfjs;
+GlobalWorkerOptions.disableWorker = true; // node environment
 
 const formatCurrency = (value) => {
   const number = Number.parseFloat(value);
@@ -69,3 +75,116 @@ export const generateAnnotatedPdf = ({
 
     doc.end();
   });
+
+const toTopLeftY = (viewportHeight, bottomY) =>
+  Number((viewportHeight - bottomY).toFixed(2));
+
+const toFontSize = (a, b) => Number(Math.hypot(a, b).toFixed(2));
+
+export const extractPdfStructure = async (pdfPath) => {
+  const fileBuffer = await fs.readFile(pdfPath);
+  const task = getDocument({ data: fileBuffer });
+  const pdf = await task.promise;
+
+  const pages = [];
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+
+    const items = content.items.map((item) => {
+      const [a, b, _c, d, e, f] = item.transform;
+      const fontSize = toFontSize(a, b);
+      const height = Number((item.height || fontSize).toFixed(2));
+      const width = Number((item.width || 0).toFixed(2));
+
+      return {
+        text: item.str,
+        x: Number(e.toFixed(2)),
+        y: toTopLeftY(viewport.height, f),
+        width,
+        height,
+        fontSize,
+      };
+    });
+
+    pages.push({
+      pageNumber,
+      width: Number(viewport.width.toFixed(2)),
+      height: Number(viewport.height.toFixed(2)),
+      items,
+    });
+  }
+
+  await task.destroy();
+  return pages;
+};
+
+const hexToRgb = (hex) => {
+  const normalized = hex.replace("#", "");
+  if (normalized.length !== 6) return rgb(0, 0, 0);
+  const bigint = parseInt(normalized, 16);
+  const r = ((bigint >> 16) & 255) / 255;
+  const g = ((bigint >> 8) & 255) / 255;
+  const b = (bigint & 255) / 255;
+  return rgb(r, g, b);
+};
+
+export const updatePdfInPlace = async (pdfPath, updates = []) => {
+  const pdfBytes = await fs.readFile(pdfPath);
+  const pdfDoc = await PDFLibDocument.load(pdfBytes);
+  const pages = pdfDoc.getPages();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  updates.forEach((update) => {
+    const pageIndex = (update.pageNumber || 1) - 1;
+    const page = pages[pageIndex];
+    if (!page || !update.text) return;
+
+    const pageHeight = page.getHeight();
+    const x = Number(update.x || 0);
+    const yTop = Number(update.y || 0);
+    const y = pageHeight - yTop;
+    const fontSize = Number(update.fontSize || 12);
+    const width = Number(update.width || font.widthOfTextAtSize(update.text, fontSize));
+    const height = Number(update.height || fontSize * 1.2);
+    const color = update.color ? hexToRgb(update.color) : rgb(0, 0, 0);
+
+    // cover old text area
+    page.drawRectangle({
+      x,
+      y: y - height,
+      width,
+      height,
+      color: rgb(1, 1, 1),
+      borderColor: rgb(1, 1, 1),
+    });
+
+    page.drawText(update.text, {
+      x,
+      y: y - height + (height - fontSize),
+      size: fontSize,
+      font,
+      color,
+    });
+  });
+
+  const updatedBytes = await pdfDoc.save();
+  await fs.writeFile(pdfPath, updatedBytes);
+  return updatedBytes;
+};
+
+export const logPdfTextPositions = async (pdfPath) => {
+  const structure = await extractPdfStructure(pdfPath);
+  structure.forEach((page) => {
+    console.log(
+      `[PDF][PAGE ${page.pageNumber}] size=${page.width}x${page.height}`
+    );
+    page.items.forEach((item) => {
+      console.log(
+        `  text="${item.text}" x=${item.x} y=${item.y} w=${item.width} h=${item.height} size=${item.fontSize}`
+      );
+    });
+  });
+  return structure;
+};
